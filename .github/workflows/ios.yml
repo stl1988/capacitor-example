@@ -1,0 +1,90 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# iOS builds require macOS runners.
+# GitHub-hosted macOS runners are available on paid plans.
+# Self-hosted macOS runners work on free plans.
+
+jobs:
+  build:
+    name: Build iOS (unsigned)
+    runs-on: macos-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js ───────────────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # ── 3. Build the web app ─────────────────────────────────────────────────
+      - name: Build web app
+        run: npm run build
+
+      # ── 4. CocoaPods ─────────────────────────────────────────────────────────
+      - name: Set up CocoaPods
+        run: sudo gem install cocoapods
+
+      # ── 5. Capacitor: add iOS platform if needed, then sync ──────────────────
+      - name: Add iOS platform (if not already present)
+        run: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
+      - name: Sync Capacitor (copy dist/ into ios/)
+        run: npx cap sync ios
+
+      # ── 6. Install CocoaPod dependencies ─────────────────────────────────────
+      - name: Pod install
+        working-directory: ios/App
+        run: pod install
+
+      # ── 7. Build unsigned archive ────────────────────────────────────────────
+      # This produces an .xcarchive — suitable for Ad Hoc / TestFlight distribution
+      # once you add a signing certificate + provisioning profile as Actions secrets.
+      - name: Build iOS (unsigned simulator)
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty || true
+
+      # ── 8. Upload .app as artifact ───────────────────────────────────────────
+      - name: Upload iOS simulator build
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacitor-example-ios-simulator
+          path: ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          retention-days: 14
+
+      - name: Build summary
+        run: |
+          echo "### iOS simulator build complete! 🍎" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This is an **unsigned simulator build**." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For a real device / TestFlight build you need to:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Add your **signing certificate** and **provisioning profile** as GitHub Actions secrets" >> $GITHUB_STEP_SUMMARY
+          echo "2. Switch the scheme to \`Release\` and target \`iphoneos\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Use [fastlane](https://fastlane.tools/) or [Xcode Cloud](https://developer.apple.com/xcode-cloud/) for automated signing + upload" >> $GITHUB_STEP_SUMMARY
