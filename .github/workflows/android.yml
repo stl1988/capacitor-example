@@ -24,34 +24,43 @@ jobs:
           node-version: 20
           cache: npm
 
-      # ── 3. Install Capacitor CLI globally FIRST ───────────────────────────────
-      # The project's build script runs `npm i --silent` internally which can
-      # wipe node_modules and reinstall only production deps, removing any
-      # devDependency binaries. Installing @capacitor/cli globally puts `cap`
-      # on the system PATH where nothing can touch it.
+      # ── 3. Install Capacitor CLI globally ────────────────────────────────────
+      # Installed globally so `cap` stays on PATH regardless of what
+      # `npm run build` does to node_modules.
       - name: Install Capacitor CLI globally
         run: npm install -g @capacitor/cli
 
-      # ── 4. Install project dependencies and build the web app ────────────────
-      - name: Install dependencies and build
+      # ── 4. Build the web app ──────────────────────────────────────────────────
+      # npm run build internally runs `npm i --silent` which may strip
+      # dependencies. We run a full `npm install` afterwards to restore them.
+      - name: Install dependencies and build web app
         run: npm install && npm run build
 
-      # ── 5. Java (required by Gradle) ─────────────────────────────────────────
+      # ── 5. Restore full node_modules after build ──────────────────────────────
+      # The build script's internal `npm i --silent` can drop packages
+      # (including @capacitor/android) when NODE_ENV=production is set.
+      # A second `npm install` ensures everything is present for `cap add`.
+      - name: Restore node_modules
+        run: npm install
+
+      # ── 6. Java (required by Gradle) ─────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # ── 6. Android SDK ───────────────────────────────────────────────────────
+      # ── 7. Android SDK ───────────────────────────────────────────────────────
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      # ── 7. Accept SDK licenses ───────────────────────────────────────────────
+      # ── 8. Accept SDK licenses ───────────────────────────────────────────────
       - name: Accept Android SDK licenses
         run: yes | sdkmanager --licenses || true
 
-      # ── 8. Add Android platform and sync ─────────────────────────────────────
+      # ── 9. Add Android platform and sync ─────────────────────────────────────
+      # `cap add android` looks for @capacitor/android in node_modules.
+      # `cap sync android` copies dist/ into the android/ native project.
       - name: Add Android platform (if not already present)
         run: |
           if [ ! -d "android" ]; then
@@ -61,12 +70,12 @@ jobs:
       - name: Sync Capacitor (copy dist/ into android/)
         run: cap sync android
 
-      # ── 9. Build debug APK ───────────────────────────────────────────────────
+      # ── 10. Build debug APK ───────────────────────────────────────────────────
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      # ── 10. Upload APK as artifact ────────────────────────────────────────────
+      # ── 11. Upload APK as artifact ────────────────────────────────────────────
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -74,7 +83,7 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
-      # ── 11. Build summary ─────────────────────────────────────────────────────
+      # ── 12. Build summary ─────────────────────────────────────────────────────
       - name: Build summary
         run: |
           echo "### Android APK built successfully! 🎉" >> $GITHUB_STEP_SUMMARY
