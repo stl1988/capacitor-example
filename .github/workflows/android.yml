@@ -25,11 +25,17 @@ jobs:
           cache: npm
 
       - name: Install npm dependencies
-        run: npm ci
+        # --include=dev ensures devDependencies are installed even if
+        # NODE_ENV=production is set in the CI environment.
+        run: npm install --include=dev
 
       # ── 3. Build the web app (produces dist/) ───────────────────────────────
+      # The build script calls `npm i --silent` internally; override NODE_ENV
+      # so it also installs devDependencies (vite, typescript, etc.).
       - name: Build web app
         run: npm run build
+        env:
+          NODE_ENV: development
 
       # ── 4. Java (required by Gradle / Android SDK) ──────────────────────────
       - name: Set up Java 17

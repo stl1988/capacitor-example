@@ -29,11 +29,13 @@ jobs:
           cache: npm
 
       - name: Install npm dependencies
-        run: npm ci
+        run: npm install --include=dev
 
       # ── 3. Build the web app ─────────────────────────────────────────────────
       - name: Build web app
         run: npm run build
+        env:
+          NODE_ENV: development
 
       # ── 4. CocoaPods ─────────────────────────────────────────────────────────
       - name: Set up CocoaPods
