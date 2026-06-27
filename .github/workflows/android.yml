@@ -44,11 +44,13 @@ jobs:
         run: npm install
 
       # ── 6. Java (required by Gradle) ─────────────────────────────────────────
-      - name: Set up Java 17
+      # @capacitor/android v8 sets sourceCompatibility = JavaVersion.VERSION_21
+      # so Java 21 is required. Java 17 produces "invalid source release: 21".
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       # ── 7. Android SDK ───────────────────────────────────────────────────────
       - name: Set up Android SDK
